@@ -67,7 +67,7 @@ The serial link itself was half the battle. A few real-world gotchas: The Pi had
 
 ![bridge_running](assets/bridge_running.png)
 
-Once those were sorted out, a minimal serial test program on the Atari was enough to prove that typed text and returned bytes were really making the round trip. After that, integrating the protocol into the GUI was the nex step.
+Once those were sorted out, a minimal serial test program on the Atari was enough to prove that typed text and returned bytes were really making the round trip. After that, integrating the protocol into the GUI was the next step.
 
 ## The current result
 
