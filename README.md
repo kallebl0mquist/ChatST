@@ -1,6 +1,6 @@
 # A ChatGPT Client for Atari ST (in GFA Basic 3.5)
 
-I have been building a GEM-based LLM chat client for the Atari ST in [GFA BASIC](https://en.wikipedia.org/wiki/GFA_BASIC) 3.5E. The rough idea was simple and slightly ridiculous: what if an Atari ST could talk to a modern LLM. Not a fake retro skin in a browser, no emulator (though I love [Hatari](https://www.hatari-emu.org)!), but my actual old Atari Mega STE. 
+I have been building a GEM-based LLM chat client for the Atari ST in [GFA BASIC](https://en.wikipedia.org/wiki/GFA_BASIC) 3.5E. What if an Atari ST could talk to a modern LLM? Not a fake retro skin in a browser, no emulator (though I love [Hatari](https://www.hatari-emu.org)!), but my actual old Atari Mega STE. 
 GFA BASIC was developed by [Frank Ostrowski](https://en.wikipedia.org/wiki/Frank_Ostrowski) in 1986 and was hugely popular among ST users at the time. So I chose it in the hope that there might be still some resources out there. Did I learn GFA Basic properly for this project? No, but i dug out all the [old docs](https://gfabasic.net/stg/gfabasic.htm) and [books](https://archive.org/details/das-grosse-gfa-basic-3.0-buch/) and forced codex to learn it. Ha,ha. Poor thing. 
 
 The setup :
