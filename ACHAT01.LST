@@ -1,0 +1,1129 @@
+' ACHAT01.GFA - ChatST 0.1
+' GFA Basic 3.5E - Atari Mega STE
+SB%=144
+IH%=22
+PAD%=4
+LH%=8
+FS%=4
+SFS%=4
+FW%=6
+MINIL%=2
+MAXIL%=4
+' Chat-Daten
+DIM ct$(31),cf$(31),mr$(99),mt$(99)
+DIM cdt%(31),ctm%(31)
+DIM dl$(200),dr$(200),ds%(200)
+DIM qras%(5),zras%(5),bpar%(8)
+n_ch%=0
+sel%=0
+nm%=0
+inp$=""
+sc%=0
+curt$=""
+curf$=""
+rxbuf$=""
+ans$=""
+serok%=0
+chatdir$="CHATS"
+GOSUB init_chat_store
+~XBIOS(15,1,0,&H88,-1,-1,-1)
+OPEN "O",#9,"AUX:"
+serok%=-1
+' Menue
+DIM men$(16)
+men$(0)="ChatST"
+men$(1)="Ueber"
+men$(2)="Beenden"
+men$(3)="--------------------"
+men$(4)=" "
+men$(5)=" "
+men$(6)=" "
+men$(7)=" "
+men$(8)=" "
+men$(9)=""
+men$(10)="Menue"
+men$(11)="Einstellungen"
+men$(12)="Hilfe"
+men$(13)=""
+men$(14)=""
+men$(15)=""
+MENU men$()
+ON MENU GOSUB do_menu
+' Fenster
+DIM buf&(7)
+adr%=V:buf&(0)
+ABSOLUTE mg&,adr%
+handle&=WIND_CREATE(511,0,19,639,380)
+wt$="ChatST 0.1"+CHR$(0)
+wp%=V:wt$
+~WIND_SET(handle&,2,CARD(SWAP(wp%)),CARD(wp%),0,0)
+~WIND_OPEN(handle&,0,19,639,380)
+~WIND_GET(handle&,4,wx&,wy&,ww&,wh&)
+GOSUB draw_all
+' Hauptschleife
+ef%=19
+fin%=0
+REPEAT
+  ON MENU
+  ev%=EVNT_MULTI(ef%,1,1,1,0,0,0,0,0,0,0,0,0,0,adr%,0,mx%,my%,mb%,ks%,kr%,mc%)
+  IF ev% AND 1
+    kc%=kr% MOD 256
+    scn%=kr% DIV 256
+    oldsc%=sc%
+    dline%=0
+    IF scn%=72
+      sc%=sc%-1
+      dline%=-1
+    ENDIF
+    IF scn%=80
+      sc%=sc%+1
+      dline%=1
+    ENDIF
+    IF scn%=71
+      IF AND(ks%,3)
+        sc%=999
+      ELSE
+        sc%=0
+      ENDIF
+    ENDIF
+    GOSUB clamp_scroll
+    IF sc%<>oldsc%
+      GOSUB update_slider
+      didfast%=0
+      IF dline%=1
+        IF sc%=oldsc%+1
+          GOSUB scroll_chat_dn1
+          didfast%=1
+        ENDIF
+      ENDIF
+      IF didfast%=0
+        IF dline%=-1
+          IF sc%=oldsc%-1
+            GOSUB scroll_chat_up1
+            didfast%=1
+          ENDIF
+        ENDIF
+      ENDIF
+      IF didfast%=0
+        GOSUB draw_chat_area
+      ENDIF
+    ENDIF
+    IF kc%=8
+      IF LEN(inp$)>0
+        oldih%=ih2%
+        inp$=LEFT$(inp$,LEN(inp$)-1)
+        GOSUB calc_input_metrics
+        IF ih2%<>oldih%
+          GOSUB draw_all
+        ELSE
+          GOSUB draw_input_box_only
+        ENDIF
+      ENDIF
+    ENDIF
+    IF kc%=13
+      IF LEN(inp$)>0
+        IF nm%<100
+          mr$(nm%)="U"
+          mt$(nm%)=inp$
+          nm%=nm%+1
+          ans$=""
+          IF serok%
+            PRINT #9,"CHATBEGIN"
+            i%=0
+            WHILE i%<nm%
+              IF mr$(i%)="U"
+                role$="user"
+              ELSE
+                role$="assistant"
+              ENDIF
+              lstr$=STR$(LEN(mt$(i%)))
+              IF LEFT$(lstr$,1)=" "
+                lstr$=MID$(lstr$,2)
+              ENDIF
+              PRINT #9,"MSG "+role$+" "+lstr$
+              PRINT #9,mt$(i%)
+              INC i%
+            WEND
+            PRINT #9,"CHATEND"
+            mode%=0
+            alen%=0
+            done%=0
+            t%=0
+            REPEAT
+              rxbuf$=rxbuf$+INPAUX$
+              IF mode%=0
+                p%=INSTR(rxbuf$,CHR$(10))
+                IF p%>0
+                  line$=LEFT$(rxbuf$,p%-1)
+                  rxbuf$=MID$(rxbuf$,p%+1)
+                  IF LEN(line$)>0
+                    IF RIGHT$(line$,1)=CHR$(13)
+                      line$=LEFT$(line$,LEN(line$)-1)
+                    ENDIF
+                  ENDIF
+                  IF LEFT$(line$,4)="ANS "
+                    lstr$=MID$(line$,5)
+                    alen%=VAL(lstr$)
+                    IF alen%<0
+                      alen%=0
+                    ENDIF
+                    mode%=1
+                  ENDIF
+                ENDIF
+              ELSE
+                IF LEN(rxbuf$)>=alen%
+                  ans$=LEFT$(rxbuf$,alen%)
+                  rxbuf$=MID$(rxbuf$,alen%+1)
+                  IF LEN(rxbuf$)>=2
+                    IF LEFT$(rxbuf$,2)=CHR$(13)+CHR$(10)
+                      rxbuf$=MID$(rxbuf$,3)
+                    ENDIF
+                  ENDIF
+                  IF LEN(rxbuf$)>=1
+                    IF LEFT$(rxbuf$,1)=CHR$(10)
+                      rxbuf$=MID$(rxbuf$,2)
+                    ENDIF
+                  ENDIF
+                  done%=-1
+                ENDIF
+              ENDIF
+              t%=t%+1
+              ~XBIOS(37)
+            UNTIL done% OR t%>3000
+          ENDIF
+          IF ans$=""
+            ans$="[keine ANS-Antwort]"
+          ENDIF
+          IF nm%<100
+            mr$(nm%)="A"
+            mt$(nm%)=ans$
+            nm%=nm%+1
+          ENDIF
+          GOSUB save_current_chat
+          GOSUB load_chat_index
+          GOSUB select_current_chat
+          inp$=""
+          sc%=999
+          GOSUB draw_all
+        ENDIF
+      ENDIF
+    ENDIF
+    IF kc%>=32
+      IF kc%<>13
+        IF LEN(inp$)<255
+          oldih%=ih2%
+          inp$=inp$+CHR$(kc%)
+          GOSUB calc_input_metrics
+          IF ih2%<>oldih%
+            GOSUB draw_all
+          ELSE
+            GOSUB draw_input_box_only
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+  IF ev% AND 2
+    GOSUB handle_button_event
+  ENDIF
+  IF ev% AND 16
+    GOSUB handle_window_msg
+  ENDIF
+UNTIL fin%=1
+GOSUB save_current_chat
+IF serok%
+  CLOSE #9
+ENDIF
+MENU KILL
+~WIND_CLOSE(handle&)
+~WIND_DELETE(handle&)
+END
+PROCEDURE draw_all
+  DEFFILL 0,1
+  PBOX wx&,wy&,wx&+ww&-1,wy&+wh&-1
+  GOSUB refresh_layout
+  GOSUB draw_sidebar
+  GOSUB draw_dividers
+  GOSUB draw_chat
+  GOSUB draw_input
+RETURN
+PROCEDURE refresh_layout
+  GOSUB calc_input_metrics
+  GOSUB calc_chat_metrics
+  GOSUB build_lines
+  GOSUB clamp_scroll
+  GOSUB update_slider
+RETURN
+PROCEDURE init_chat_store
+  e%=FSFIRST(chatdir$,16)
+  IF e%
+    MKDIR chatdir$
+  ENDIF
+  GOSUB load_chat_index
+  IF n_ch%=0
+    GOSUB demo_load
+    GOSUB new_chat_filename
+    curf$=tmp$
+    GOSUB save_current_chat
+    GOSUB load_chat_index
+  ENDIF
+  IF n_ch%>0
+    curf$=cf$(0)
+    GOSUB load_current_chat
+    GOSUB select_current_chat
+  ENDIF
+RETURN
+PROCEDURE select_current_chat
+  sel%=0
+  ci%=0
+  WHILE ci%<n_ch%
+    IF cf$(ci%)=curf$
+      sel%=ci%
+      ci%=n_ch%
+    ELSE
+      INC ci%
+    ENDIF
+  WEND
+RETURN
+PROCEDURE load_chat_index
+  n_ch%=0
+  e%=FSFIRST(chatdir$+"\*.CHT",0)
+  WHILE e%=0 AND n_ch%<32
+    cf$(n_ch%)=CHAR{FGETDTA()+30}
+    ctm%(n_ch%)=CARD(FGETDTA()+22)
+    cdt%(n_ch%)=CARD(FGETDTA()+24)
+    tmp$=chatdir$+"\"+cf$(n_ch%)
+    GOSUB read_chat_title
+    ct$(n_ch%)=tmp$
+    INC n_ch%
+    e%=FSNEXT()
+  WEND
+  IF n_ch%>1
+    i%=0
+    WHILE i%<n_ch%-1
+      j%=i%+1
+      WHILE j%<n_ch%
+        sw%=0
+        IF cf$(j%)=curf$
+          IF cf$(i%)<>curf$
+            sw%=1
+          ENDIF
+        ENDIF
+        IF sw%=0
+          IF cf$(i%)=curf$
+            IF cf$(j%)<>curf$
+              sw%=0
+            ENDIF
+          ENDIF
+        ENDIF
+        IF sw%=0
+          IF cdt%(j%)>cdt%(i%)
+            sw%=1
+          ENDIF
+        ENDIF
+        IF sw%=0
+          IF cdt%(j%)=cdt%(i%)
+            IF ctm%(j%)>ctm%(i%)
+              sw%=1
+            ENDIF
+          ENDIF
+        ENDIF
+        IF sw%
+          a$=ct$(i%)
+          ct$(i%)=ct$(j%)
+          ct$(j%)=a$
+          a$=cf$(i%)
+          cf$(i%)=cf$(j%)
+          cf$(j%)=a$
+          h%=cdt%(i%)
+          cdt%(i%)=cdt%(j%)
+          cdt%(j%)=h%
+          h%=ctm%(i%)
+          ctm%(i%)=ctm%(j%)
+          ctm%(j%)=h%
+        ENDIF
+        INC j%
+      WEND
+      INC i%
+    WEND
+  ENDIF
+RETURN
+PROCEDURE read_chat_title
+  title$="Chat"
+  OPEN "I",#1,tmp$
+  LINE INPUT #1,head$
+  IF head$="CHATST1"
+    LINE INPUT #1,len$
+    tlen%=VAL(len$)
+    IF tlen%>0
+      title$=SPACE$(tlen%)
+      BGET #1,VARPTR(title$),tlen%
+    ENDIF
+  ENDIF
+  CLOSE #1
+  tmp$=title$
+RETURN
+PROCEDURE load_current_chat
+  nm%=0
+  inp$=""
+  sc%=999
+  tmp$=chatdir$+"\"+curf$
+  OPEN "I",#1,tmp$
+  LINE INPUT #1,head$
+  IF head$="CHATST1"
+    LINE INPUT #1,len$
+    tlen%=VAL(len$)
+    curt$=""
+    IF tlen%>0
+      curt$=SPACE$(tlen%)
+      BGET #1,VARPTR(curt$),tlen%
+    ENDIF
+    LINE INPUT #1,dummy$
+    LINE INPUT #1,cnt$
+    nm%=VAL(cnt$)
+    IF nm%<0
+      nm%=0
+    ENDIF
+    IF nm%>100
+      nm%=100
+    ENDIF
+    i%=0
+    WHILE i%<nm%
+      LINE INPUT #1,role$
+      mr$(i%)=LEFT$(role$,1)
+      LINE INPUT #1,len$
+      mlen%=VAL(len$)
+      mt$(i%)=""
+      IF mlen%>0
+        mt$(i%)=SPACE$(mlen%)
+        BGET #1,VARPTR(mt$(i%)),mlen%
+      ENDIF
+      LINE INPUT #1,dummy$
+      INC i%
+    WEND
+  ENDIF
+  CLOSE #1
+RETURN
+PROCEDURE save_current_chat
+  IF curf$=""
+    GOSUB new_chat_filename
+    curf$=tmp$
+  ENDIF
+  IF curt$=""
+    curt$="Neuer Chat"
+  ENDIF
+  tmp$=chatdir$+"\"+curf$
+  OPEN "O",#1,tmp$
+  PRINT #1,"CHATST1"
+  PRINT #1,LEN(curt$)
+  IF LEN(curt$)>0
+    BPUT #1,VARPTR(curt$),LEN(curt$)
+  ENDIF
+  OUT #1,13
+  OUT #1,10
+  PRINT #1,nm%
+  i%=0
+  WHILE i%<nm%
+    PRINT #1,mr$(i%)
+    PRINT #1,LEN(mt$(i%))
+    IF LEN(mt$(i%))>0
+      BPUT #1,VARPTR(mt$(i%)),LEN(mt$(i%))
+    ENDIF
+    OUT #1,13
+    OUT #1,10
+    INC i%
+  WEND
+  CLOSE #1
+RETURN
+PROCEDURE new_chat_filename
+  nid%=1
+  tmp$=""
+  found%=0
+  WHILE nid%<=9999 AND found%=0
+    n1%=nid% DIV 1000
+    n2%=(nid% DIV 100) MOD 10
+    n3%=(nid% DIV 10) MOD 10
+    n4%=nid% MOD 10
+    tmp$="CHAT"+CHR$(48+n1%)+CHR$(48+n2%)+CHR$(48+n3%)+CHR$(48+n4%)+".CHT"
+    e%=FSFIRST(chatdir$+"\"+tmp$,0)
+    IF e%
+      found%=1
+    ELSE
+      INC nid%
+    ENDIF
+  WEND
+RETURN
+PROCEDURE new_chat
+  GOSUB save_current_chat
+  curt$="Neuer Chat"
+  curf$=""
+  nm%=0
+  inp$=""
+  sc%=999
+  GOSUB new_chat_filename
+  curf$=tmp$
+  GOSUB save_current_chat
+  GOSUB load_chat_index
+  GOSUB select_current_chat
+RETURN
+PROCEDURE handle_button_event
+  IF mb%=1
+    bx%=wx&+4
+    by%=wy&+2
+    bw%=SB%-8
+    bh%=16
+    IF mx%>=bx%
+      IF mx%<=bx%+bw%
+        IF my%>=by%
+          IF my%<=by%+bh%
+            GOSUB new_chat
+            GOSUB draw_all
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+    sep%=by%+18
+    ly%=sep%+LH%+2
+    srow%=LH%+4
+    IF mx%>=wx&+2
+      IF mx%<=wx&+SB%-2
+        IF my%>=ly%
+          ci%=(my%-ly%)/srow%
+          IF ci%>=0
+            IF ci%<n_ch%
+              IF ci%<>sel%
+                GOSUB save_current_chat
+                curf$=cf$(ci%)
+                GOSUB load_current_chat
+                GOSUB select_current_chat
+                GOSUB draw_all
+              ENDIF
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+    iy%=wy&+wh&-ih2%+4
+    ix%=wx&+SB%+PAD%
+    iw%=ww&-SB%-2*PAD%-64
+    bx%=ix%+iw%+4
+    by%=iy%
+    bw%=56
+    bh%=16
+    IF mx%>=bx%
+      IF mx%<=bx%+bw%
+        IF my%>=by%
+          IF my%<=by%+bh%
+            IF LEN(inp$)>0
+              IF nm%<100
+                mr$(nm%)="U"
+                mt$(nm%)=inp$
+                nm%=nm%+1
+                ans$=""
+                IF serok%
+                  PRINT #9,"CHATBEGIN"
+                  i%=0
+                  WHILE i%<nm%
+                    IF mr$(i%)="U"
+                      role$="user"
+                    ELSE
+                      role$="assistant"
+                    ENDIF
+                    lstr$=STR$(LEN(mt$(i%)))
+                    IF LEFT$(lstr$,1)=" "
+                      lstr$=MID$(lstr$,2)
+                    ENDIF
+                    PRINT #9,"MSG "+role$+" "+lstr$
+                    PRINT #9,mt$(i%)
+                    INC i%
+                  WEND
+                  PRINT #9,"CHATEND"
+                  mode%=0
+                  alen%=0
+                  done%=0
+                  t%=0
+                  REPEAT
+                    rxbuf$=rxbuf$+INPAUX$
+                    IF mode%=0
+                      p%=INSTR(rxbuf$,CHR$(10))
+                      IF p%>0
+                        line$=LEFT$(rxbuf$,p%-1)
+                        rxbuf$=MID$(rxbuf$,p%+1)
+                        IF LEN(line$)>0
+                          IF RIGHT$(line$,1)=CHR$(13)
+                            line$=LEFT$(line$,LEN(line$)-1)
+                          ENDIF
+                        ENDIF
+                        IF LEFT$(line$,4)="ANS "
+                          lstr$=MID$(line$,5)
+                          alen%=VAL(lstr$)
+                          IF alen%<0
+                            alen%=0
+                          ENDIF
+                          mode%=1
+                        ENDIF
+                      ENDIF
+                    ELSE
+                      IF LEN(rxbuf$)>=alen%
+                        ans$=LEFT$(rxbuf$,alen%)
+                        rxbuf$=MID$(rxbuf$,alen%+1)
+                        IF LEN(rxbuf$)>=2
+                          IF LEFT$(rxbuf$,2)=CHR$(13)+CHR$(10)
+                            rxbuf$=MID$(rxbuf$,3)
+                          ENDIF
+                        ENDIF
+                        IF LEN(rxbuf$)>=1
+                          IF LEFT$(rxbuf$,1)=CHR$(10)
+                            rxbuf$=MID$(rxbuf$,2)
+                          ENDIF
+                        ENDIF
+                        done%=-1
+                      ENDIF
+                    ENDIF
+                    t%=t%+1
+                    ~XBIOS(37)
+                  UNTIL done% OR t%>3000
+                ENDIF
+                IF ans$=""
+                  ans$="[keine ANS-Antwort]"
+                ENDIF
+                IF nm%<100
+                  mr$(nm%)="A"
+                  mt$(nm%)=ans$
+                  nm%=nm%+1
+                ENDIF
+                GOSUB save_current_chat
+                GOSUB load_chat_index
+                GOSUB select_current_chat
+                inp$=""
+                sc%=999
+                GOSUB draw_all
+              ENDIF
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  ENDIF
+RETURN
+PROCEDURE handle_window_msg
+  IF buf&(3)=handle&
+    SELECT mg&
+    CASE 20
+      ~WIND_GET(handle&,4,wx&,wy&,ww&,wh&)
+      GOSUB draw_all
+    CASE 22
+      fin%=1
+    CASE 23
+      ~WIND_SET(handle&,5,0,19,639,380)
+      ~WIND_GET(handle&,4,wx&,wy&,ww&,wh&)
+      GOSUB draw_all
+    CASE 24
+      GOSUB handle_arrow_msg
+    CASE 26
+      GOSUB handle_vslider_msg
+    CASE 27,28
+      ~WIND_GET(handle&,4,wx&,wy&,ww&,wh&)
+      GOSUB draw_all
+    ENDSELECT
+  ENDIF
+RETURN
+PROCEDURE handle_arrow_msg
+  oldsc%=sc%
+  dline%=0
+  IF buf&(4)=0
+    sc%=sc%-vl%+1
+  ENDIF
+  IF buf&(4)=1
+    sc%=sc%+vl%-1
+  ENDIF
+  IF buf&(4)=2
+    sc%=sc%-1
+    dline%=-1
+  ENDIF
+  IF buf&(4)=3
+    sc%=sc%+1
+    dline%=1
+  ENDIF
+  GOSUB clamp_scroll
+  IF sc%<>oldsc%
+    GOSUB update_slider
+    IF sc%=oldsc%+1 AND dline%=1
+      GOSUB scroll_chat_dn1
+    ELSE
+      IF sc%=oldsc%-1 AND dline%=-1
+        GOSUB scroll_chat_up1
+      ELSE
+        GOSUB draw_chat_area
+      ENDIF
+    ENDIF
+  ENDIF
+RETURN
+PROCEDURE handle_vslider_msg
+  oldsc%=sc%
+  IF tl%>vl%
+    sc%=(buf&(4)*(tl%-vl%))/1000
+  ELSE
+    sc%=0
+  ENDIF
+  GOSUB clamp_scroll
+  IF sc%<>oldsc%
+    GOSUB update_slider
+    GOSUB draw_chat_area
+  ENDIF
+RETURN
+PROCEDURE calc_input_metrics
+  row_h%=LH%+1
+  in_step%=row_h%
+  sth%=row_h%+5
+  ix%=wx&+SB%+PAD%
+  iw%=ww&-SB%-2*PAD%-64
+  maxc%=(iw%-8)/FW%
+  IF maxc%<4
+    maxc%=4
+  ENDIF
+  rest$=inp$
+  ilc%=0
+  REPEAT
+    IF LEN(rest$)<=maxc%
+      part$=rest$
+      rest$=""
+    ELSE
+      sp%=maxc%
+      WHILE sp%>1 AND MID$(rest$,sp%,1)<>" "
+        sp%=sp%-1
+      WEND
+      IF sp%<=1
+        sp%=maxc%
+      ENDIF
+      part$=LEFT$(rest$,sp%)
+      IF RIGHT$(part$,1)=" "
+        part$=LEFT$(part$,LEN(part$)-1)
+      ENDIF
+      rest$=MID$(rest$,sp%+1)
+      WHILE LEN(rest$)>0 AND LEFT$(rest$,1)=" "
+        rest$=MID$(rest$,2)
+      WEND
+    ENDIF
+    INC ilc%
+  UNTIL LEN(rest$)=0
+  alc%=ilc%
+  IF ilc%<MINIL%
+    ilc%=MINIL%
+  ENDIF
+  ivl%=ilc%
+  IF ivl%>MAXIL%
+    ivl%=MAXIL%
+  ENDIF
+  isc%=ilc%-ivl%
+  IF isc%<0
+    isc%=0
+  ENDIF
+  ibh%=ivl%*in_step%+9
+  ih2%=ibh%+sth%
+RETURN
+PROCEDURE draw_sidebar
+  DEFFILL 1,2,4
+  PBOX wx&,wy&,wx&+SB%-1,wy&+wh&-1
+  bx%=wx&+4
+  by%=wy&+2
+  bw%=SB%-8
+  bh%=16
+  GOSUB draw_btn
+  DEFTEXT 1,0,0,FS%
+  TEXT bx%+4,by%+11,"+ Neuer Chat"
+  sep%=by%+18
+  LINE wx&+4,sep%,wx&+SB%-4,sep%
+  DEFFILL 0,1
+  PBOX wx&+2,sep%+1,wx&+SB%-2,sep%+LH%
+  DEFTEXT 1,0,0,FS%
+  TEXT wx&+4,sep%+LH%-1,"Chats:"
+  ly%=sep%+LH%+2
+  srow%=LH%+4
+  sbh%=LH%+1
+  FOR ci%=0 TO n_ch%-1
+    iy%=ly%+ci%*srow%
+    DEFFILL 0,1
+    PBOX wx&+2,iy%,wx&+SB%-2,iy%+sbh%
+    IF ci%=sel%
+      BOX wx&+2,iy%,wx&+SB%-2,iy%+sbh%
+      DEFTEXT 1,0,0,FS%
+      TEXT wx&+4,iy%+LH%-1,"> "+LEFT$(ct$(ci%),18)
+    ELSE
+      DEFTEXT 1,0,0,FS%
+      TEXT wx&+4,iy%+LH%-1,"  "+LEFT$(ct$(ci%),18)
+    ENDIF
+  NEXT ci%
+RETURN
+PROCEDURE draw_btn
+  DEFFILL 0,1
+  PBOX bx%,by%,bx%+bw%,by%+bh%
+  BOX bx%,by%,bx%+bw%,by%+bh%
+RETURN
+PROCEDURE draw_dividers
+  LINE wx&+SB%,wy&,wx&+SB%,wy&+wh&-1
+  LINE wx&+SB%,wy&+wh&-ih2%,wx&+ww&-1,wy&+wh&-ih2%
+RETURN
+PROCEDURE draw_chat_area
+  DEFFILL 0,1
+  PBOX wx&+SB%+1,wy&+1,wx&+ww&-1,wy&+wh&-ih2%-1
+  GOSUB draw_dividers
+  GOSUB draw_chat
+RETURN
+PROCEDURE scroll_chat_up1
+  chx%=cx%
+  chy%=ctop%
+  chw%=cw%
+  chh%=chatb%-ctop%
+  dy%=text_step%
+  pad%=LH%
+  IF dy%<1
+    GOSUB draw_chat_area
+  ELSE
+    IF chh%<=dy%
+      GOSUB draw_chat_area
+    ELSE
+      bpar%(0)=chx%
+      bpar%(1)=chy%
+      bpar%(2)=chx%+chw%-1
+      bpar%(3)=chy%+chh%-dy%-1
+      bpar%(4)=chx%
+      bpar%(5)=chy%+dy%
+      bpar%(6)=chx%+chw%-1
+      bpar%(7)=chy%+chh%-1
+      bpar%(8)=3
+      BITBLT qras%(),zras%(),bpar%()
+      fy%=chy%
+      fh%=dy%+pad%
+      IF fh%>chh%
+        fh%=chh%
+      ENDIF
+      CLIP chx%,fy%,chw%,fh%
+      DEFFILL 0,1
+      PBOX chx%,fy%,chx%+chw%-1,fy%+fh%-1
+      GOSUB draw_chat
+      CLIP OFF
+    ENDIF
+  ENDIF
+RETURN
+PROCEDURE scroll_chat_dn1
+  chx%=cx%
+  chy%=ctop%
+  chw%=cw%
+  chh%=chatb%-ctop%
+  dy%=text_step%
+  pad%=LH%
+  IF dy%<1
+    GOSUB draw_chat_area
+  ELSE
+    IF chh%<=dy%
+      GOSUB draw_chat_area
+    ELSE
+      bpar%(0)=chx%
+      bpar%(1)=chy%+dy%
+      bpar%(2)=chx%+chw%-1
+      bpar%(3)=chy%+chh%-1
+      bpar%(4)=chx%
+      bpar%(5)=chy%
+      bpar%(6)=chx%+chw%-1
+      bpar%(7)=chy%+chh%-1-dy%
+      bpar%(8)=3
+      BITBLT qras%(),zras%(),bpar%()
+      fy%=chy%+chh%-dy%-pad%
+      fh%=dy%+pad%
+      IF fy%<chy%
+        fh%=fh%-(chy%-fy%)
+        fy%=chy%
+      ENDIF
+      IF fh%<dy%
+        fh%=dy%
+      ENDIF
+      CLIP chx%,fy%,chw%,fh%
+      DEFFILL 0,1
+      PBOX chx%,chy%+chh%-dy%,chx%+chw%-1,chy%+chh%-1
+      GOSUB draw_chat
+      CLIP OFF
+    ENDIF
+  ENDIF
+RETURN
+PROCEDURE draw_chat
+  li%=sc%
+  py%=ctop%
+  WHILE li%<tl% AND py%+LH%<chatb%
+    DEFTEXT 1,0,0,FS%
+    IF dr$(li%)="U"
+      gi%=li%
+      WHILE gi%<tl% AND dr$(gi%)="U"
+        INC gi%
+      WEND
+      tw%=ubmax%
+      ux%=cx%+cw%-tw%-2
+      vk%=li%
+      vis%=0
+      ty%=py%
+      WHILE vk%<gi% AND ty%+LH%<chatb%
+        INC vis%
+        ty%=ty%+text_step%
+        INC vk%
+      WEND
+      bh%=vis%*text_step%
+      DEFFILL 0,1
+      PBOX ux%,py%,ux%+tw%,py%+bh%
+      BOX ux%,py%,ux%+tw%,py%+bh%
+      vk%=li%
+      ty%=py%
+      WHILE vk%<gi% AND ty%+LH%<chatb%
+        TEXT ux%+4,ty%+LH%-1,dl$(vk%)
+        ty%=ty%+text_step%
+        INC vk%
+      WEND
+      py%=ty%
+      li%=vk%
+    ELSE
+      IF dr$(li%)="A"
+        TEXT ax%,py%+LH%-1,dl$(li%)
+      ENDIF
+      py%=py%+text_step%
+      li%=li%+1
+    ENDIF
+  WEND
+RETURN
+PROCEDURE calc_chat_metrics
+  cx%=wx&+SB%+PAD%+2
+  cw%=ww&-SB%-2*PAD%-4
+  ctop%=wy&+2
+  chatb%=wy&+wh&-ih2%-PAD%-2
+  ubmax%=cw%*2/3
+  IF ubmax%<120
+    ubmax%=120
+  ENDIF
+  IF ubmax%>cw%-8
+    ubmax%=cw%-8
+  ENDIF
+  row_h%=LH%+1
+  text_step%=row_h%
+  msg_gap%=text_step%
+  step%=text_step%
+  ax%=cx%+4
+  vl%=(chatb%-ctop%)/step%
+  IF vl%<1
+    vl%=1
+  ENDIF
+RETURN
+PROCEDURE build_lines
+  tl%=0
+  ci%=0
+  WHILE ci%<nm% AND tl%<200
+    IF mr$(ci%)="U"
+      maxc%=(ubmax%-12)/FW%
+    ELSE
+      maxc%=(cw%-12)/FW%
+    ENDIF
+    IF maxc%<4
+      maxc%=4
+    ENDIF
+    rest$=mt$(ci%)
+    first%=1
+    REPEAT
+      IF LEN(rest$)<=maxc%
+        part$=rest$
+        rest$=""
+      ELSE
+        sp%=maxc%
+        WHILE sp%>1 AND MID$(rest$,sp%,1)<>" "
+          sp%=sp%-1
+        WEND
+        IF sp%<=1
+          sp%=maxc%
+        ENDIF
+        part$=LEFT$(rest$,sp%)
+        IF RIGHT$(part$,1)=" "
+          part$=LEFT$(part$,LEN(part$)-1)
+        ENDIF
+        rest$=MID$(rest$,sp%+1)
+        WHILE LEN(rest$)>0 AND LEFT$(rest$,1)=" "
+          rest$=MID$(rest$,2)
+        WEND
+      ENDIF
+      dl$(tl%)=part$
+      dr$(tl%)=mr$(ci%)
+      ds%(tl%)=first%
+      first%=0
+      INC tl%
+    UNTIL LEN(rest$)=0 OR tl%=200
+    IF ci%<nm%-1
+      IF tl%<200
+        dl$(tl%)=""
+        dr$(tl%)="G"
+        ds%(tl%)=0
+        INC tl%
+      ENDIF
+    ENDIF
+    INC ci%
+  WEND
+RETURN
+PROCEDURE clamp_scroll
+  mxs%=tl%-vl%
+  IF mxs%<0
+    mxs%=0
+  ENDIF
+  IF sc%<0
+    sc%=0
+  ENDIF
+  IF sc%>mxs%
+    sc%=mxs%
+  ENDIF
+RETURN
+PROCEDURE update_slider
+  IF tl%<=vl%
+    ~WIND_SET(handle&,16,1000,0,0,0)
+    ~WIND_SET(handle&,9,1,0,0,0)
+  ELSE
+    sz%=(vl%*1000)/tl%
+    IF sz%<40
+      sz%=40
+    ENDIF
+    pos%=(sc%*1000)/(tl%-vl%)
+    IF pos%<1
+      pos%=1
+    ENDIF
+    ~WIND_SET(handle&,16,sz%,0,0,0)
+    ~WIND_SET(handle&,9,pos%,0,0,0)
+  ENDIF
+RETURN
+PROCEDURE draw_input
+  iy%=wy&+wh&-ih2%+4
+  sy%=iy%+ibh%+1
+  DEFFILL 0,1
+  PBOX wx&+SB%+1,wy&+wh&-ih2%+1,wx&+ww&-1,wy&+wh&-1
+  GOSUB draw_input_box_only
+  bx%=ix%+iw%+4
+  by%=iy%
+  bw%=56
+  bh%=16
+  GOSUB draw_btn
+  TEXT bx%+8,by%+11,"Senden"
+  DEFTEXT 1,0,0,SFS%
+  TEXT ix%,sy%+LH%-1,"GPT-5.4   [Web]"
+RETURN
+PROCEDURE draw_input_box_only
+  iy%=wy&+wh&-ih2%+4
+  DEFFILL 0,1
+  PBOX ix%+1,iy%+1,ix%+iw%-1,iy%+ibh%-2
+  BOX ix%,iy%,ix%+iw%,iy%+ibh%-1
+  DEFTEXT 1,0,0,FS%
+  maxc%=(iw%-8)/FW%
+  IF maxc%<4
+    maxc%=4
+  ENDIF
+  rest$=inp$
+  li%=0
+  vis%=0
+  ty%=iy%+LH%
+  REPEAT
+    IF LEN(rest$)<=maxc%
+      part$=rest$
+      rest$=""
+    ELSE
+      sp%=maxc%
+      WHILE sp%>1 AND MID$(rest$,sp%,1)<>" "
+        sp%=sp%-1
+      WEND
+      IF sp%<=1
+        sp%=maxc%
+      ENDIF
+      part$=LEFT$(rest$,sp%)
+      IF RIGHT$(part$,1)=" "
+        part$=LEFT$(part$,LEN(part$)-1)
+      ENDIF
+      rest$=MID$(rest$,sp%+1)
+      WHILE LEN(rest$)>0 AND LEFT$(rest$,1)=" "
+        rest$=MID$(rest$,2)
+      WEND
+    ENDIF
+    IF li%>=isc%
+      IF li%=alc%-1
+        TEXT ix%+3,ty%,part$+"_"
+      ELSE
+        TEXT ix%+3,ty%,part$
+      ENDIF
+      ty%=ty%+in_step%
+      INC vis%
+    ENDIF
+    INC li%
+  UNTIL LEN(rest$)=0
+  IF LEN(inp$)=0
+    TEXT ix%+3,iy%+LH%,"_"
+  ENDIF
+RETURN
+PROCEDURE do_menu
+  MENU OFF
+  m%=MENU(0)
+  IF m%=1
+    ALERT 1,"ChatST 0.1|GFA Basic 3.5E",1,"OK",z%
+  ENDIF
+  IF m%=2
+    GOSUB save_current_chat
+    fin%=1
+  ENDIF
+  IF m%=11
+    ALERT 1,"Einstellungen|COM1 - 19200 Baud",1,"OK",z%
+  ENDIF
+  IF m%=12
+    ALERT 1,"Hilfe|Pfeile scrollen den Chat.|Enter sendet eine Nachricht.",1,"OK",z%
+  ENDIF
+RETURN
+PROCEDURE demo_load
+  curt$="Quantencomp."
+  mr$(0)="U"
+  mt$(0)="Was ist Quantencomputing?"
+  mr$(1)="A"
+  mt$(1)="Superposition und Verschraenkung ermoeglichen neue Arten der Berechnung."
+  mr$(2)="A"
+  mt$(2)="Bestimmte Probleme lassen sich damit deutlich effizienter loesen."
+  mr$(3)="A"
+  mt$(3)="Fuer viele alltaegliche Aufgaben bringt es aber keinen Vorteil."
+  mr$(4)="U"
+  mt$(4)="Was ist ein Qubit und warum ist es anders als ein Bit?"
+  mr$(5)="A"
+  mt$(5)="Ein Qubit kann Zustaende ueberlagern und wird erst bei der Messung festgelegt."
+  mr$(6)="A"
+  mt$(6)="Zusaetzlich koennen mehrere Qubits miteinander verschraenkt sein."
+  mr$(7)="U"
+  mt$(7)="Heisst das, ein Quantencomputer ersetzt spaeter jeden normalen Rechner?"
+  mr$(8)="A"
+  mt$(8)="Nein, eher eine Spezialmaschine fuer bestimmte Klassen von Problemen."
+  mr$(9)="A"
+  mt$(9)="Normale Computer bleiben fuer viele Dinge praktischer, guenstiger und robuster."
+  mr$(10)="U"
+  mt$(10)="Und was waere ein realistischer erster Einsatzbereich fuer so eine Maschine?"
+  mr$(11)="A"
+  mt$(11)="Zum Beispiel Optimierung, Materialforschung, Quantenchemie oder bestimmte Kryptographiefragen."
+  mr$(12)="A"
+  mt$(12)="Vieles davon ist experimentell und nicht sofort alltagstauglich."
+  mr$(13)="U"
+  mt$(13)="Dann ist ChatST also erstmal eher das stilvollste Terminal fuer moderne Modelle."
+  mr$(14)="A"
+  mt$(14)="Genau. Klassisches GEM-Gefuehl aussen, aktuelle Sprachmodelle innen."
+  mr$(15)="A"
+  mt$(15)="Und spaeter kommen noch Speichern, Eingabe, serielle Kommunikation und richtiges Scrollen dazu."
+  mr$(16)="U"
+  mt$(16)="Was waere denn eine gute erste technische Baustelle nach dem Layout?"
+  mr$(17)="A"
+  mt$(17)="Zuerst wuerde ich die Eingabe live machen, dann Nachrichten absenden und direkt im Chat anzeigen."
+  mr$(18)="A"
+  mt$(18)="Danach lohnt sich Speichern in einer einfachen Textdatei mit klaren Tags fuer Rolle und Inhalt."
+  mr$(19)="U"
+  mt$(19)="Und die serielle Verbindung zum Raspberry Pi wahrscheinlich erst danach, oder?"
+  mr$(20)="A"
+  mt$(20)="Ja, dann hat die Benutzeroberflaeche schon einen klaren Datenfluss und die Bridge kann exakt daran andocken."
+  mr$(21)="A"
+  mt$(21)="Ausserdem lassen sich Fehler dann besser trennen: UI, Dateiformat und Schnittstelle."
+  mr$(22)="U"
+  mt$(22)="Klingt gut. Ich mag, dass das wie eine klassische GEM App wirkt und trotzdem moderne Modelle anspricht."
+  mr$(23)="A"
+  mt$(23)="Genau dieser Kontrast ist der Charme des Projekts."
+  mr$(24)="A"
+  mt$(24)="Und wenn wir genug Inhalt laden, sollte jetzt auch der Slider sichtbar arbeiten koennen."
+  nm%=25
+RETURN
