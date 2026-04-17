@@ -80,7 +80,7 @@ The current app has:
 - serial round-trip to the Raspberry Pi bridge
 - live OpenAI responses on a real Atari ST-class machine
 
-*Of course this is only a party trick. No real GFA programmers were harmed (or involved). Still, there is something deeply satisfying about connecting worlds that were never supposed to meet.* 
+*Of course this program is more of a party trick than really useful. No GFA programmers were harmed (or involved). Still, there is something deeply satisfying about connecting worlds that were never supposed to meet.* 
 
 ![IMG_4367](assets/IMG_4367.jpeg)
 
